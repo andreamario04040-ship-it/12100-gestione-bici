@@ -77,6 +77,8 @@ a { color: var(--blue); }
 .btn--rosso { background: transparent; border-color: var(--rosso); color: var(--rosso); }
 .btn--rosso:hover:not(:disabled) { background: var(--rosso); border-color: var(--rosso); color: var(--paper); }
 .btn--piccolo { padding: 7px 12px 6px; font-size: 11px; }
+.btn--largo { width: 100%; }
+.btn--staccato-sopra { margin-top: 10px; }
 .btn svg { width: 15px; height: 15px; fill: none; stroke: currentColor; stroke-width: 2; }
 
 /* --------------------------------------------------------------- accesso */
@@ -98,6 +100,7 @@ a { color: var(--blue); }
 
 /* --------------------------------------------------------------- campi */
 label.campo { display: block; margin-bottom: 16px; }
+label.campo--staccato { margin-top: 16px; }
 label.campo > span { display: block; margin-bottom: 6px; }
 label.campo em { font-style: normal; text-transform: none; letter-spacing: 0; font-weight: 400; color: var(--muted); }
 input[type="text"], input[type="password"], textarea, select {
@@ -172,9 +175,11 @@ ol.bici { list-style: none; margin: 0; padding: 0; display: flex; flex-direction
 .foto__quadro img { width: 100%; height: 100%; object-fit: cover; display: block; }
 .foto__quadro span { position: absolute; inset: 0; display: grid; place-items: center; text-align: center; padding: 10px; color: var(--muted); font-size: 12px; }
 .foto__nota { font-size: 13px; color: var(--muted); margin: 8px 0 14px; }
+.foto__nota--staccata { margin: 12px 0 18px; }
 input[type="range"] { width: 100%; accent-color: var(--blue); }
 input[type="file"] { display: none; }
 
+[data-elimina] { margin-bottom: 18px; }
 .stato-scelta { display: flex; gap: 0; border: 1px solid var(--ink); width: fit-content; }
 .stato-scelta label {
   padding: 9px 16px 8px; cursor: pointer;
@@ -216,3 +221,6 @@ input[type="file"] { display: none; }
 @media (prefers-reduced-motion: reduce) {
   * { animation-duration: .01ms !important; transition-duration: .01ms !important; }
 }
+
+/* --------------------------------------------------------------- blocco */
+.accesso--blocco { position: fixed; inset: 0; z-index: 20; background: rgba(233, 232, 228, .96); backdrop-filter: blur(3px); }

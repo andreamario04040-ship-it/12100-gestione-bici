@@ -7,6 +7,14 @@
    ========================================================================== */
 'use strict';
 
+/* Nessuno può incorniciare questa pagina dentro un'altra per rubare i clic:
+   la regola CSP che lo vieta vale solo negli header, e GitHub Pages non li manda. */
+if (window.top !== window.self) {
+  document.documentElement.replaceChildren();
+  window.location.replace('about:blank');
+  throw new Error('Questa pagina non si apre dentro un\'altra pagina.');
+}
+
 const CONFIG = {
   utente: 'andreamario04040-ship-it',
   repo: '12100-cycling-studio',
@@ -20,7 +28,10 @@ const CONFIG = {
 };
 
 const API = 'https://api.github.com';
-const CHIAVE_SALVATA = '12100-gestione-token';
+const CASSAFORTE = '12100-gestione-cassaforte';
+const VECCHIA_CHIAVE = '12100-gestione-token';   // la prima versione la teneva in chiaro
+const TENTATIVI_MAX = 5;
+const INATTIVITA = 30 * 60 * 1000;
 
 const $ = (sel, dove = document) => dove.querySelector(sel);
 const $$ = (sel, dove = document) => [...dove.querySelectorAll(sel)];
@@ -34,6 +45,8 @@ let scelta = null;        // bici selezionata
 let fotoNuove = new Map();// uid bici -> { larghezze, blobi, anteprima }
 let fotoCaricate = new Map();// chiave -> anteprima, per non aspettare il sito
 let pubblicando = false;
+let bloccato = false;
+let ultimoTocco = Date.now();
 
 /* --------------------------------------------------------------- utilità */
 function slug(s) {
@@ -89,8 +102,66 @@ async function gh(percorso, opzioni = {}) {
 
 const inRepo = (percorso) => `/repos/${CONFIG.utente}/${CONFIG.repo}${percorso}`;
 
+/* --------------------------------------------------------------- cassaforte
+   La chiave di GitHub non resta in chiaro nel browser: è chiusa con un codice
+   che sa solo chi la usa (AES-GCM, codice allungato con PBKDF2). Chi arrivasse
+   alla memoria del browser si porterebbe via una busta chiusa, e senza il
+   codice non la apre. Dopo cinque codici sbagliati la busta si brucia.
+*/
+const bytesInB64 = (b) => base64(new Uint8Array(b));
+const b64InBytes = (s) => Uint8Array.from(atob(s), (c) => c.charCodeAt(0));
+
+async function chiaveDiCifratura(codice, sale) {
+  const grezza = await crypto.subtle.importKey(
+    'raw', new TextEncoder().encode(codice), 'PBKDF2', false, ['deriveKey']);
+  return crypto.subtle.deriveKey(
+    { name: 'PBKDF2', salt: sale, iterations: 250000, hash: 'SHA-256' },
+    grezza, { name: 'AES-GCM', length: 256 }, false, ['encrypt', 'decrypt']);
+}
+
+function cassaforte() {
+  try { return JSON.parse(localStorage.getItem(CASSAFORTE) || 'null'); } catch (_) { return null; }
+}
+
+async function chiudiInCassaforte(chiave, codice) {
+  const sale = crypto.getRandomValues(new Uint8Array(16));
+  const iv = crypto.getRandomValues(new Uint8Array(12));
+  const chiusa = await crypto.subtle.encrypt({ name: 'AES-GCM', iv },
+    await chiaveDiCifratura(codice, sale), new TextEncoder().encode(chiave));
+  localStorage.setItem(CASSAFORTE, JSON.stringify({
+    v: 1, sale: base64(sale), iv: base64(iv), chiusa: bytesInB64(chiusa), tentativi: 0 }));
+}
+
+async function apriCassaforte(codice) {
+  const busta = cassaforte();
+  if (!busta) throw new Error('Su questo dispositivo non c\'è nessuna chiave salvata.');
+  // Il tentativo si conta prima di provare: ricaricare la pagina non azzera il contatore.
+  busta.tentativi = (busta.tentativi || 0) + 1;
+  if (busta.tentativi > TENTATIVI_MAX) {
+    localStorage.removeItem(CASSAFORTE);
+    throw new Error('Troppi codici sbagliati: la chiave è stata cancellata da questo dispositivo. Serve incollarne una nuova.');
+  }
+  localStorage.setItem(CASSAFORTE, JSON.stringify(busta));
+  let aperta;
+  try {
+    aperta = await crypto.subtle.decrypt(
+      { name: 'AES-GCM', iv: b64InBytes(busta.iv) },
+      await chiaveDiCifratura(codice, b64InBytes(busta.sale)),
+      b64InBytes(busta.chiusa));
+  } catch (_) {
+    const restano = TENTATIVI_MAX - busta.tentativi;
+    throw new Error(
+      restano > 1 ? `Codice sbagliato. Restano ${restano} tentativi, poi la chiave viene cancellata da qui.`
+      : restano === 1 ? 'Codice sbagliato. Resta un tentativo, poi la chiave viene cancellata da qui.'
+      : 'Codice sbagliato. Era l\'ultimo tentativo.');
+  }
+  busta.tentativi = 0;
+  localStorage.setItem(CASSAFORTE, JSON.stringify(busta));
+  return new TextDecoder().decode(aperta);
+}
+
 /* --------------------------------------------------------------- accesso */
-async function entra(chiave) {
+async function verifica(chiave) {
   token = chiave;
   const utente = await gh('/user');
   const repo = await gh(inRepo(''));
@@ -100,58 +171,116 @@ async function entra(chiave) {
   return utente;
 }
 
-async function avvia() {
-  const salvata = localStorage.getItem(CHIAVE_SALVATA);
-  if (!salvata) return mostraAccesso();
-  try {
-    const utente = await entra(salvata);
-    await apriApp(utente);
-  } catch (e) {
-    mostraAccesso(e.message);
+function avvia() {
+  localStorage.removeItem(VECCHIA_CHIAVE);
+  if (!window.isSecureContext || !window.crypto || !crypto.subtle) {
+    return mostraAccesso({ errore: 'Questa pagina va aperta in https: altrimenti la chiave non si può mettere al sicuro.' });
   }
+  mostraAccesso();
 }
 
-function mostraAccesso(errore) {
-  $('#app').hidden = true;
+function mostraAccesso({ errore = '', blocco = false } = {}) {
+  const haChiave = Boolean(cassaforte());
+  $('#app').hidden = !blocco;          // sotto il velo del blocco l'app resta com'era
   $('#accesso').hidden = false;
+  $('#accesso').classList.toggle('accesso--blocco', blocco);
+  $('#riga-token').hidden = haChiave;
+  $('#accesso-aiuto').hidden = haChiave;
+  $('#btn-dimentica').hidden = !haChiave;
+  $('#accesso-titolo').textContent = blocco ? 'Chiuso a chiave' : 'Gestione bici';
+  $('#eti-pin').textContent = haChiave ? 'Codice' : 'Scegli un codice';
+  $('#campo-pin').placeholder = haChiave ? '' : 'almeno 5 cifre';
+  $('#btn-entra').textContent = blocco ? 'Riapri' : 'Entra';
+  $('#accesso-testo').textContent = blocco
+    ? 'Era da un po\' che non toccavi niente, così ho richiuso la chiave. Il codice la riapre: quello che stavi facendo è ancora qui.'
+    : haChiave
+      ? 'Il codice riapre la chiave salvata su questo dispositivo.'
+      : 'Qui dentro si aggiungono, si modificano e si tolgono le bici in rastrelliera sul sito. La chiave di accesso si incolla una volta sola: resta su questo dispositivo, chiusa con un codice che scegli tu.';
   const stato = $('#accesso-stato');
-  stato.textContent = errore || '';
+  stato.textContent = errore;
   stato.className = 'barra__stato' + (errore ? ' is-errore' : '');
-  $('#campo-token').focus();
+  $('#campo-pin').value = '';
+  (haChiave ? $('#campo-pin') : $('#campo-token')).focus();
 }
 
 $('#form-accesso').addEventListener('submit', async (e) => {
   e.preventDefault();
   const btn = $('#btn-entra');
   const stato = $('#accesso-stato');
+  const codice = $('#campo-pin').value.trim();
   btn.disabled = true;
   stato.className = 'barra__stato';
-  stato.innerHTML = '<span class="filo"></span>Controllo la chiave…';
   try {
-    const utente = await entra($('#campo-token').value.trim());
-    localStorage.setItem(CHIAVE_SALVATA, token);
-    await apriApp(utente);
+    if (cassaforte()) {
+      stato.innerHTML = '<span class="filo"></span>Apro la chiave…';
+      const chiave = await apriCassaforte(codice);
+      if (bloccato) sblocca(chiave);
+      else await apriApp(await verifica(chiave));
+    } else {
+      if (codice.length < 5) throw new Error('Il codice deve avere almeno 5 cifre.');
+      stato.innerHTML = '<span class="filo"></span>Controllo la chiave…';
+      const utente = await verifica($('#campo-token').value.trim());
+      await chiudiInCassaforte(token, codice);
+      $('#campo-token').value = '';
+      await apriApp(utente);
+    }
   } catch (err) {
     token = '';
-    stato.className = 'barra__stato is-errore';
-    stato.textContent = err.message;
+    if (!cassaforte()) mostraAccesso({ errore: err.message });
+    else {
+      stato.className = 'barra__stato is-errore';
+      stato.textContent = err.message;
+    }
   } finally {
     btn.disabled = false;
   }
 });
 
+$('#btn-dimentica').addEventListener('click', () => {
+  if (!confirm('Cancello la chiave da questo dispositivo?\n\nDopo serve incollarne una nuova, e quella vecchia conviene revocarla su GitHub.')) return;
+  localStorage.removeItem(CASSAFORTE);
+  token = '';
+  mostraAccesso();
+});
+
 $('#btn-esci').addEventListener('click', () => {
   if (cambiato() && !confirm('Ci sono modifiche non pubblicate: uscendo si perdono. Esco comunque?')) return;
-  localStorage.removeItem(CHIAVE_SALVATA);
+  localStorage.removeItem(CASSAFORTE);
   location.reload();
 });
 
+/* Se si resta fermi mezz'ora, la chiave si richiude: un telefono dimenticato
+   sul bancone non è una porta aperta. Il lavoro in corso resta dov'è. */
+function blocca() {
+  if (!token || bloccato) return;
+  token = '';
+  bloccato = true;
+  mostraAccesso({ blocco: true });
+}
+
+function sblocca(chiave) {
+  token = chiave;
+  bloccato = false;
+  ultimoTocco = Date.now();
+  $('#accesso').hidden = true;
+  $('#accesso').classList.remove('accesso--blocco');
+  $('#app').hidden = false;
+}
+
+['pointerdown', 'keydown', 'focusin'].forEach((evento) =>
+  addEventListener(evento, () => { ultimoTocco = Date.now(); }, { passive: true }));
+setInterval(() => {
+  if (token && !pubblicando && Date.now() - ultimoTocco > INATTIVITA) blocca();
+}, 20000);
+
 async function apriApp(utente) {
   $('#accesso').hidden = true;
+  $('#accesso').classList.remove('accesso--blocco');
   $('#app').hidden = false;
   $('#chi').textContent = utente.login;
   $('#link-sito').href = CONFIG.sito;
-  await caricaDati();
+  ultimoTocco = Date.now();
+  if (!dati) await caricaDati();
 }
 
 /* --------------------------------------------------------------- dati */
@@ -199,7 +328,7 @@ function disegnaLista() {
 
     const url = urlFoto(bici);
     const foto = url
-      ? `<img class="riga__foto" src="${url}" alt="" style="object-position:50% ${inquadraturaDi(bici)}%">`
+      ? `<img class="riga__foto" src="${fuga(url)}" alt="">`
       : '<span class="riga__foto riga__foto--vuota">foto<br>?</span>';
 
     const dettagli = [bici.prezzo, bici.taglia].filter(Boolean).join(' · ');
@@ -222,6 +351,8 @@ function disegnaLista() {
     li.addEventListener('keydown', (e) => {
       if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); seleziona(bici); }
     });
+    const miniatura = $('img.riga__foto', li);
+    if (miniatura) miniatura.style.objectPosition = `50% ${inquadraturaDi(bici)}%`;
     trascina(li);
     lista.append(li);
   });

@@ -3,6 +3,9 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
+<!-- Guinzaglio: la pagina carica solo file suoi e parla solo con GitHub e col sito.
+     Se cambia il dominio del sito, va cambiato anche qui (e in CONFIG.sito di app.js). -->
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'self'; style-src 'self'; font-src 'self'; img-src 'self' blob: data: https://andreamario04040-ship-it.github.io https://images.unsplash.com; connect-src 'self' https://api.github.com https://andreamario04040-ship-it.github.io; form-action 'none'; base-uri 'none'">
 <meta name="robots" content="noindex, nofollow">
 <title>Gestione bici · 12100 Cycling Studio</title>
 <meta name="description" content="Pannello per aggiornare le bici in rastrelliera sul sito 12100 Cycling Studio.">
@@ -23,17 +26,22 @@
 <section class="accesso" id="accesso" hidden>
   <div class="accesso__foglio">
     <p class="kicker">12100 Cycling Studio</p>
-    <h1>Gestione bici</h1>
-    <p>Qui dentro si aggiungono, si modificano e si togliono le bici in rastrelliera sul sito. Serve una chiave di accesso: si incolla una volta e resta salvata su questo dispositivo.</p>
+    <h1 id="accesso-titolo">Gestione bici</h1>
+    <p id="accesso-testo"></p>
     <form id="form-accesso" autocomplete="off">
-      <label class="campo">
+      <label class="campo" id="riga-token">
         <span class="etichetta">Chiave di accesso</span>
-        <input id="campo-token" type="password" autocomplete="off" spellcheck="false" placeholder="github_pat_…" required>
+        <input id="campo-token" type="password" autocomplete="off" spellcheck="false" placeholder="github_pat_…">
+      </label>
+      <label class="campo">
+        <span class="etichetta" id="eti-pin">Codice</span>
+        <input id="campo-pin" type="password" inputmode="numeric" autocomplete="off" spellcheck="false" placeholder="almeno 5 cifre">
       </label>
       <p class="barra__stato" id="accesso-stato" role="status" aria-live="polite"></p>
-      <button class="btn" type="submit" id="btn-entra" style="width:100%">Entra</button>
+      <button class="btn btn--largo" type="submit" id="btn-entra">Entra</button>
+      <button class="btn btn--vuoto btn--largo btn--staccato-sopra" type="button" id="btn-dimentica" hidden>Ho dimenticato il codice</button>
     </form>
-    <details>
+    <details id="accesso-aiuto">
       <summary>Come si ottiene la chiave</summary>
       <ol>
         <li>Su GitHub, con l'account che ha accesso al sito: <strong>Settings → Developer settings → Personal access tokens → Fine-grained tokens → Generate new token</strong>.</li>
@@ -94,11 +102,11 @@
         <p class="foto__nota" data-foto-nota>Sul sito la foto viene tagliata in verticale (4:5), come la vedi qui a fianco.</p>
         <button class="btn btn--vuoto btn--piccolo" type="button" data-scegli-foto>Scegli una foto</button>
         <input type="file" accept="image/*" data-file>
-        <label class="campo" style="margin-top:16px" data-riga-inquadratura hidden>
+        <label class="campo campo--staccato" data-riga-inquadratura hidden>
           <span class="etichetta">Inquadratura <em>— alza o abbassa il taglio</em></span>
           <input type="range" min="0" max="100" step="1" data-inquadratura>
         </label>
-        <label class="campo" style="margin-top:16px">
+        <label class="campo campo--staccato">
           <span class="etichetta">Cosa si vede nella foto <em>— per chi non la può vedere e per Google</em></span>
           <input type="text" data-alt placeholder="es. Colnago V5Rs rossa su cavalletto in officina">
         </label>
@@ -164,8 +172,8 @@
       <label><input type="radio" name="stato" value="pubblicata"><span>Sul sito</span></label>
       <label><input type="radio" name="stato" value="bozza"><span>In bozza</span></label>
     </div>
-    <p class="foto__nota" style="margin:12px 0 18px">In bozza la bici resta salvata qui ma non si vede sul sito: comoda per prepararla prima che arrivi in negozio.</p>
-    <button class="btn btn--rosso btn--piccolo" type="button" data-elimina style="margin-bottom:18px">Elimina questa bici</button>
+    <p class="foto__nota foto__nota--staccata">In bozza la bici resta salvata qui ma non si vede sul sito: comoda per prepararla prima che arrivi in negozio.</p>
+    <button class="btn btn--rosso btn--piccolo" type="button" data-elimina>Elimina questa bici</button>
   </div>
 </template>
 

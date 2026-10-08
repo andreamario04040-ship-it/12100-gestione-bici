@@ -32,18 +32,45 @@ accesso in scrittura al repository del sito:
 3. **Repository access → Only select repositories** → soltanto `12100-cycling-studio`.
 4. **Permissions → Repository permissions → Contents → Read and write**. Nient'altro.
 
-La chiave si incolla una volta e resta nel browser di quel dispositivo
-(`localStorage`). Non passa da nessun'altra parte. Con **Esci** si cancella.
+La chiave si incolla una volta sola. Non resta in chiaro: viene chiusa con un
+**codice** di almeno 5 cifre scelto da chi la usa (AES-GCM, codice allungato con
+PBKDF2 a 250.000 giri) e solo così finisce nel browser di quel dispositivo. Da lì
+in poi si entra col codice. La chiave non passa da nessun altro posto: niente
+server nostri, niente servizi di terzi.
 
-> Se la chiave finisce in mano a qualcuno, può solo scrivere in quel repository:
-> si revoca da GitHub e se ne fa un'altra. Conviene comunque non usare il pannello
-> su computer condivisi.
+## Cosa protegge cosa
+
+| Se succede questo | Cosa lo ferma |
+| --- | --- |
+| Qualcuno trova l'indirizzo del pannello | Vede la schermata di accesso e basta: senza chiave non esiste nessun dato da leggere. |
+| Qualcuno ruba il telefono o il computer | La chiave nel browser è una busta chiusa: senza il codice non si apre. Dopo 5 codici sbagliati si cancella da sola. |
+| Il pannello resta aperto sul bancone | Dopo mezz'ora che non si tocca niente, la chiave si richiude da sé e riappare la richiesta del codice. Il lavoro non pubblicato resta lì. |
+| Finisce codice ostile dentro la pagina | La `Content-Security-Policy` in `index.html` lascia caricare solo file del pannello e lascia parlare solo con `api.github.com` e col sito: non c'è nessun posto dove mandare la chiave. |
+| Qualcuno incornicia il pannello in un'altra pagina per rubare i clic | `app.js` se ne accorge e si spegne (la regola CSP che lo vieta funziona solo negli header, che GitHub Pages non manda). |
+| La chiave viene rubata lo stesso | Può solo scrivere in quel repository, e ogni modifica resta nella storia di git. Si revoca da GitHub e se ne fa un'altra: **Settings → Developer settings → Personal access tokens**. |
+
+Se il codice si dimentica, dalla schermata di accesso si cancella la chiave e se
+ne incolla una nuova (e la vecchia si revoca su GitHub).
+
+## Quello che questa soluzione non fa
+
+Il pannello sta sullo stesso `github.io` del sito del negozio: per il browser è la
+**stessa origine**, quindi uno script servito da lì dentro potrebbe arrivare alla
+busta (non al suo contenuto, che resta chiuso dal codice). Il giorno in cui si
+vuole la porta vera — nessuno può nemmeno *aprire* la pagina se non è nell'elenco
+— si sposta il pannello su Cloudflare Pages con Cloudflare Access davanti: è
+gratis, dà un indirizzo tutto suo e chiede l'email a chi arriva, prima ancora di
+servire la pagina.
 
 ## Quando il sito avrà il dominio vero
 
-In `app.js`, in cima, cambiare `CONFIG.sito` con l'indirizzo nuovo: serve al pannello
-per mostrare le anteprime delle foto già pubblicate e per capire quando il sito si è
-aggiornato. Il resto non cambia.
+Due posti, tutti e due in cima ai file:
+
+- `app.js` → `CONFIG.sito`: serve per le anteprime delle foto già pubblicate e per
+  capire quando la pubblicazione è arrivata online davvero;
+- `index.html` → la `Content-Security-Policy`: l'indirizzo del sito compare in
+  `img-src` e in `connect-src`. Se non si aggiorna, il pannello smette di vedere
+  le foto e di accorgersi che il sito è aggiornato.
 
 ## In locale
 
