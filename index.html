@@ -1,0 +1,174 @@
+<!doctype html>
+<html lang="it">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex, nofollow">
+<title>Gestione bici · 12100 Cycling Studio</title>
+<meta name="description" content="Pannello per aggiornare le bici in rastrelliera sul sito 12100 Cycling Studio.">
+<link rel="icon" href="favicon-64.png" sizes="64x64">
+<link rel="stylesheet" href="stile.css?v=1">
+</head>
+<body>
+
+<svg hidden aria-hidden="true">
+  <symbol id="i-su" viewBox="0 0 24 24"><path d="M12 19V6M6 12l6-6 6 6"/></symbol>
+  <symbol id="i-giu" viewBox="0 0 24 24"><path d="M12 5v13M6 12l6 6 6-6"/></symbol>
+  <symbol id="i-piu" viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></symbol>
+  <symbol id="i-indietro" viewBox="0 0 24 24"><path d="M19 12H5M12 5l-7 7 7 7"/></symbol>
+  <symbol id="i-fuori" viewBox="0 0 24 24"><path d="M14 4h6v6M20 4l-9 9M18 14v5a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V7a1 1 0 0 1 1-1h5"/></symbol>
+</svg>
+
+<!-- ============================================================ ACCESSO -->
+<section class="accesso" id="accesso" hidden>
+  <div class="accesso__foglio">
+    <p class="kicker">12100 Cycling Studio</p>
+    <h1>Gestione bici</h1>
+    <p>Qui dentro si aggiungono, si modificano e si togliono le bici in rastrelliera sul sito. Serve una chiave di accesso: si incolla una volta e resta salvata su questo dispositivo.</p>
+    <form id="form-accesso" autocomplete="off">
+      <label class="campo">
+        <span class="etichetta">Chiave di accesso</span>
+        <input id="campo-token" type="password" autocomplete="off" spellcheck="false" placeholder="github_pat_…" required>
+      </label>
+      <p class="barra__stato" id="accesso-stato" role="status" aria-live="polite"></p>
+      <button class="btn" type="submit" id="btn-entra" style="width:100%">Entra</button>
+    </form>
+    <details>
+      <summary>Come si ottiene la chiave</summary>
+      <ol>
+        <li>Su GitHub, con l'account che ha accesso al sito: <strong>Settings → Developer settings → Personal access tokens → Fine-grained tokens → Generate new token</strong>.</li>
+        <li>Nome: <code>gestione bici</code>. Scadenza: la più lunga disponibile (va rifatta quando scade).</li>
+        <li><strong>Repository access → Only select repositories</strong> e scegliere soltanto il repository del sito.</li>
+        <li><strong>Permissions → Repository permissions → Contents → Read and write</strong>. Nient'altro.</li>
+        <li>Generare, copiare la chiave e incollarla qui sopra. Su GitHub non si rivede più: se si perde, se ne fa un'altra.</li>
+      </ol>
+    </details>
+  </div>
+</section>
+
+<!-- ============================================================ APP -->
+<div class="app" id="app" hidden>
+
+  <header class="testa">
+    <h1>12100<small>Gestione bici</small></h1>
+    <div class="testa__dx">
+      <span class="testa__chi" id="chi"></span>
+      <a class="btn btn--piccolo" id="link-sito" href="#" target="_blank" rel="noopener">Vedi il sito<svg aria-hidden="true"><use href="#i-fuori"/></svg></a>
+      <button class="btn btn--piccolo" type="button" id="btn-esci">Esci</button>
+    </div>
+  </header>
+
+  <div class="corpo">
+    <section class="elenco" aria-labelledby="elenco-titolo">
+      <div class="elenco__testa">
+        <p class="etichetta" id="elenco-titolo">In rastrelliera · <span id="conta"></span></p>
+        <button class="btn btn--piccolo" type="button" id="btn-aggiungi"><svg aria-hidden="true"><use href="#i-piu"/></svg>Aggiungi</button>
+      </div>
+      <ol class="bici" id="lista"></ol>
+    </section>
+
+    <section class="scheda" id="scheda" aria-live="polite">
+      <p class="scheda__vuota">Scegli una bici dall'elenco, oppure aggiungine una.</p>
+    </section>
+  </div>
+
+  <footer class="barra">
+    <button class="btn btn--vuoto scheda__indietro" type="button" id="btn-indietro"><svg aria-hidden="true"><use href="#i-indietro"/></svg>Elenco</button>
+    <p class="barra__stato" id="stato" role="status" aria-live="polite"></p>
+    <button class="btn" type="button" id="btn-pubblica" disabled>Pubblica</button>
+  </footer>
+
+</div>
+
+<template id="modello-scheda">
+  <h2 data-titolo-scheda>Bici</h2>
+  <p class="etichetta scheda__via" data-via-scheda></p>
+
+  <div class="gruppo">
+    <p class="etichetta">Foto</p>
+    <div class="foto">
+      <div class="foto__quadro" data-quadro>
+        <span data-quadro-vuoto>Nessuna foto</span>
+      </div>
+      <div>
+        <p class="foto__nota" data-foto-nota>Sul sito la foto viene tagliata in verticale (4:5), come la vedi qui a fianco.</p>
+        <button class="btn btn--vuoto btn--piccolo" type="button" data-scegli-foto>Scegli una foto</button>
+        <input type="file" accept="image/*" data-file>
+        <label class="campo" style="margin-top:16px" data-riga-inquadratura hidden>
+          <span class="etichetta">Inquadratura <em>— alza o abbassa il taglio</em></span>
+          <input type="range" min="0" max="100" step="1" data-inquadratura>
+        </label>
+        <label class="campo" style="margin-top:16px">
+          <span class="etichetta">Cosa si vede nella foto <em>— per chi non la può vedere e per Google</em></span>
+          <input type="text" data-alt placeholder="es. Colnago V5Rs rossa su cavalletto in officina">
+        </label>
+      </div>
+    </div>
+  </div>
+
+  <div class="gruppo">
+    <p class="etichetta">Scheda</p>
+    <label class="campo">
+      <span class="etichetta">Nome della bici</span>
+      <input type="text" data-campo="titolo" placeholder="es. Colnago V5Rs">
+    </label>
+    <div class="campi-riga">
+      <label class="campo">
+        <span class="etichetta">Prezzo <em>— vuoto = non compare</em></span>
+        <input type="text" data-campo="prezzo" placeholder="es. 8.900 € oppure Su richiesta">
+      </label>
+      <label class="campo">
+        <span class="etichetta">Taglia <em>— vuoto = non compare</em></span>
+        <input type="text" data-campo="taglia" placeholder="es. Taglia 54">
+      </label>
+    </div>
+    <label class="campo">
+      <span class="etichetta">Descrizione</span>
+      <textarea data-campo="descrizione" placeholder="Due righe: com'è, per chi è, cosa la rende speciale."></textarea>
+    </label>
+    <label class="campo">
+      <span class="etichetta">Riga in fondo <em>— gruppo, ruote, note</em></span>
+      <input type="text" data-campo="modelli" placeholder="es. Dura-Ace Di2 · Elitewheels Drive 50">
+    </label>
+  </div>
+
+  <div class="gruppo">
+    <p class="etichetta">Bottone</p>
+    <div class="campi-riga">
+      <label class="campo">
+        <span class="etichetta">Dove porta</span>
+        <select data-cta-tipo>
+          <option value="whatsapp">WhatsApp</option>
+          <option value="link">Un indirizzo</option>
+          <option value="niente">Nessun bottone</option>
+        </select>
+      </label>
+      <label class="campo" data-riga-cta-testo>
+        <span class="etichetta">Scritta sul bottone</span>
+        <input type="text" data-cta-testo placeholder="es. Chiedi disponibilità">
+      </label>
+    </div>
+    <label class="campo" data-riga-cta-messaggio>
+      <span class="etichetta">Messaggio già scritto per chi ti contatta</span>
+      <input type="text" data-cta-messaggio placeholder="Ciao! Vorrei informazioni sulla Colnago V5Rs.">
+    </label>
+    <label class="campo" data-riga-cta-url hidden>
+      <span class="etichetta">Indirizzo</span>
+      <input type="text" data-cta-url placeholder="https://…">
+    </label>
+  </div>
+
+  <div class="gruppo">
+    <p class="etichetta">Stato</p>
+    <div class="stato-scelta" data-stato>
+      <label><input type="radio" name="stato" value="pubblicata"><span>Sul sito</span></label>
+      <label><input type="radio" name="stato" value="bozza"><span>In bozza</span></label>
+    </div>
+    <p class="foto__nota" style="margin:12px 0 18px">In bozza la bici resta salvata qui ma non si vede sul sito: comoda per prepararla prima che arrivi in negozio.</p>
+    <button class="btn btn--rosso btn--piccolo" type="button" data-elimina style="margin-bottom:18px">Elimina questa bici</button>
+  </div>
+</template>
+
+<script src="app.js?v=1"></script>
+</body>
+</html>
