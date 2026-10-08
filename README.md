@@ -72,6 +72,17 @@ Due posti, tutti e due in cima ai file:
   `img-src` e in `connect-src`. Se non si aggiorna, il pannello smette di vedere
   le foto e di accorgersi che il sito è aggiornato.
 
+## Dopo ogni modifica
+
+```bash
+python3 versiona.py
+```
+
+Cambia il codice di versione di `stile.css` e `app.js` dentro `index.html`. Senza,
+per dieci minuti un browser può mettere insieme la pagina nuova con lo script
+vecchio: con la schermata di accesso che è cambiata, vuol dire un pannello che
+non si apre.
+
 ## In locale
 
 ```bash
