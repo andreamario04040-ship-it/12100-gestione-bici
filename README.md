@@ -72,6 +72,20 @@ Due posti, tutti e due in cima ai file:
   `img-src` e in `connect-src`. Se non si aggiorna, il pannello smette di vedere
   le foto e di accorgersi che il sito è aggiornato.
 
+## Sul telefono
+
+Dal browser del telefono, **Condividi → Aggiungi alla schermata Home**: il pannello
+si apre a tutto schermo, senza barra del browser, con il simbolo del sito su fondo
+inchiostro e la scritta «Gestione bici» sotto.
+
+Le icone (`apple-touch-icon.png` per iOS, `icona-192.png` e `icona-512.png` per
+Android, elencate in `manifest.webmanifest`) sono composte dal simbolo del sito
+(`assets/img/logo-mark.png`) centrato dentro il 66% del quadrato: così regge anche
+il ritaglio tondo che fa Android. Se cambia il logo, si rifanno da lì.
+
+> Su iPhone l'app aggiunta alla Home ha una memoria sua, separata da Safari: la
+> prima volta va incollata di nuovo la chiave e scelto il codice. Si fa una volta sola.
+
 ## Dopo ogni modifica
 
 ```bash
