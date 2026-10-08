@@ -90,11 +90,16 @@ async function gh(percorso, opzioni = {}) {
       ...(opzioni.body ? { 'Content-Type': 'application/json' } : {}),
     },
   });
-  if (r.status === 401) throw new Error('La chiave di accesso non è più valida: esci e incollane una nuova.');
-  if (r.status === 403) throw new Error('GitHub ha rifiutato la richiesta: la chiave non ha il permesso di scrivere (Contents → Read and write).');
   if (!r.ok) {
     let messaggio = r.statusText;
     try { messaggio = (await r.json()).message || messaggio; } catch (_) {}
+    if (r.status === 401) {
+      throw new Error(`La chiave non è più valida (GitHub: «${messaggio}»). Succede quando scade o quando viene revocata: Esci e incollane una nuova.`);
+    }
+    if (r.status === 403 && r.headers.get('x-ratelimit-remaining') === '0') {
+      throw new Error('GitHub ha chiesto di rallentare: troppe richieste di fila. Riprova fra qualche minuto, non si è perso niente.');
+    }
+    if (r.status === 403) throw new Error(ERRORE_PERMESSI(messaggio));
     throw new Error(`GitHub: ${messaggio} (${r.status})`);
   }
   return r.status === 204 ? null : r.json();
@@ -161,12 +166,35 @@ async function apriCassaforte(codice) {
 }
 
 /* --------------------------------------------------------------- accesso */
+const ERRORE_PERMESSI = (detto) =>
+  `Questa chiave può leggere il sito ma non scriverci, e per pubblicare serve scrivere.\n\n` +
+  `Su GitHub: Settings → Developer settings → Personal access tokens → Fine-grained tokens → ` +
+  'apri la chiave che hai creato e controlla due cose:\n' +
+  `1. Repository access: «Only select repositories», con ${CONFIG.repo} nell'elenco ` +
+  `(non «Public repositories», che è di sola lettura);\n` +
+  `2. Repository permissions → Contents: «Read and write» (è lì, non fra le Account permissions).\n\n` +
+  `Si possono cambiare sulla chiave che hai già, senza rifarla: la chiave resta la stessa.` +
+  (detto ? `\n\nGitHub dice: «${detto}».` : '');
+
 async function verifica(chiave) {
   token = chiave;
   const utente = await gh('/user');
   const repo = await gh(inRepo(''));
   if (!repo.permissions || !repo.permissions.push) {
-    throw new Error(`Questa chiave può leggere ${CONFIG.repo} ma non scriverci: va rifatta con Contents → Read and write.`);
+    throw new Error(`Con questo account non si può scrivere in ${CONFIG.repo}: ` +
+      'chiedi a chi possiede il sito di aggiungerti come collaboratore.');
+  }
+  // Il campo qui sopra dice che ruolo ha la persona nel repository, non cosa può
+  // fare la chiave: una chiave di sola lettura lo supera. L'unico modo onesto di
+  // saperlo è provare a scrivere. Un blob è la prova più innocua che esista:
+  // crea un oggetto sciolto, senza commit e senza comparire da nessuna parte.
+  try {
+    await gh(inRepo('/git/blobs'), {
+      method: 'POST',
+      body: JSON.stringify({ content: 'prova', encoding: 'utf-8' }),
+    });
+  } catch (e) {
+    throw new Error(e.message.startsWith('Questa chiave') ? e.message : ERRORE_PERMESSI(''));
   }
   return utente;
 }
@@ -721,7 +749,7 @@ async function pubblica() {
     disegnaScheda();
     await aspettaIlSito(dati.aggiornato);
   } catch (e) {
-    avvisa(fuga(e.message), 'is-errore');
+    avvisa(fuga(e.message).replace(/\n/g, '<br>'), 'is-errore');
   } finally {
     pubblicando = false;
     $('#btn-pubblica').disabled = !cambiato();
