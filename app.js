@@ -32,6 +32,7 @@ const CASSAFORTE = '12100-gestione-cassaforte';
 const VECCHIA_CHIAVE = '12100-gestione-token';   // la prima versione la teneva in chiaro
 const TENTATIVI_MAX = 5;
 const INATTIVITA = 30 * 60 * 1000;
+const MAX_FOTO = 8;
 
 const $ = (sel, dove = document) => dove.querySelector(sel);
 const $$ = (sel, dove = document) => [...dove.querySelectorAll(sel)];
@@ -42,6 +43,7 @@ let dati = null;          // { aggiornato, whatsapp, bici: [...] }
 let impronta = '';        // com'erano i dati appena caricati
 let shaDati = '';         // sha del file data/bici.json su GitHub (per accorgersi dei conflitti)
 let scelta = null;        // bici selezionata
+let scattoScelto = 0;     // quale foto della bici si sta ritoccando
 let fotoNuove = new Map();// uid bici -> { larghezze, blobi, anteprima }
 let fotoCaricate = new Map();// chiave -> anteprima, per non aspettare il sito
 let pubblicando = false;
@@ -317,7 +319,11 @@ async function caricaDati() {
   const file = await gh(inRepo(`/contents/${CONFIG.dati}?ref=${CONFIG.ramo}`));
   shaDati = file.sha;
   dati = JSON.parse(base64InTesto(file.content));
-  dati.bici.forEach((b) => { b._uid = sigla() + sigla(); });
+  dati.bici.forEach((b) => {
+    b._uid = sigla() + sigla();
+    b.foto = scattiDi(b);
+  });
+  scattoScelto = 0;
   impronta = impronteDati();
   fotoNuove.clear();
   scelta = null;
@@ -328,16 +334,21 @@ async function caricaDati() {
 }
 
 /* --------------------------------------------------------------- elenco */
-function urlFoto(bici) {
-  const nuova = fotoNuove.get(bici._uid);
-  if (nuova) return nuova.anteprima;
-  const f = bici.foto;
-  if (!f || !f.chiave) return '';
-  if (fotoCaricate.has(f.chiave)) return fotoCaricate.get(f.chiave);
-  if (f.sorgente === 'unsplash') {
-    return `https://images.unsplash.com/${f.chiave}?auto=format&fit=crop&w=400&q=70`;
+function scattiDi(bici) {
+  // Una volta ogni bici aveva una foto sola: i file vecchi si leggono lo stesso.
+  if (Array.isArray(bici.foto)) return bici.foto;
+  return bici.foto && bici.foto.chiave ? [bici.foto] : [];
+}
+
+function urlScatto(scatto) {
+  if (!scatto) return '';
+  if (scatto._locale && fotoNuove.has(scatto._locale)) return fotoNuove.get(scatto._locale).anteprima;
+  if (!scatto.chiave) return '';
+  if (fotoCaricate.has(scatto.chiave)) return fotoCaricate.get(scatto.chiave);
+  if (scatto.sorgente === 'unsplash') {
+    return `https://images.unsplash.com/${scatto.chiave}?auto=format&fit=crop&w=400&q=70`;
   }
-  return `${CONFIG.sito}/assets/img/${f.chiave}-480.webp`;
+  return `${CONFIG.sito}/assets/img/${scatto.chiave}-480.webp`;
 }
 
 function disegnaLista() {
@@ -354,12 +365,14 @@ function disegnaLista() {
     li.dataset.i = i;
     li.tabIndex = 0;
 
-    const url = urlFoto(bici);
+    const primo = bici.foto[0];
+    const url = urlScatto(primo);
     const foto = url
       ? `<img class="riga__foto" src="${fuga(url)}" alt="">`
       : '<span class="riga__foto riga__foto--vuota">foto<br>?</span>';
 
-    const dettagli = [bici.prezzo, bici.taglia].filter(Boolean).join(' · ');
+    const dettagli = [bici.prezzo, bici.taglia,
+      bici.foto.length > 1 ? `${bici.foto.length} foto` : ''].filter(Boolean).join(' · ');
     li.innerHTML = `
       ${foto}
       <div>
@@ -380,7 +393,7 @@ function disegnaLista() {
       if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); seleziona(bici); }
     });
     const miniatura = $('img.riga__foto', li);
-    if (miniatura) miniatura.style.objectPosition = `50% ${inquadraturaDi(bici)}%`;
+    if (miniatura) miniatura.style.objectPosition = `50% ${inquadraturaDi(primo)}%`;
     trascina(li);
     lista.append(li);
   });
@@ -426,6 +439,7 @@ function fuga(s) {
 
 function seleziona(bici) {
   scelta = bici;
+  scattoScelto = 0;
   $('#app').classList.add('is-scheda');
   disegnaLista();
   disegnaScheda();
@@ -444,7 +458,7 @@ $('#btn-aggiungi').addEventListener('click', () => {
     descrizione: '',
     modelli: '',
     cta: { tipo: 'whatsapp', testo: 'Chiedi disponibilità', messaggio: 'Ciao! Vorrei informazioni su questa bici.' },
-    foto: {},
+    foto: [],
   };
   dati.bici.unshift(bici);
   seleziona(bici);
@@ -454,7 +468,7 @@ $('#btn-aggiungi').addEventListener('click', () => {
 });
 
 /* --------------------------------------------------------------- scheda */
-const inquadraturaDi = (bici) => (bici.foto && bici.foto.inquadratura != null ? bici.foto.inquadratura : 50);
+const inquadraturaDi = (scatto) => (scatto && scatto.inquadratura != null ? scatto.inquadratura : 50);
 
 function disegnaScheda() {
   const dove = $('#scheda');
@@ -527,67 +541,165 @@ function disegnaScheda() {
 }
 
 function disegnaFoto(dove, bici) {
-  const quadro = $('[data-quadro]', dove);
-  const vuoto = $('[data-quadro-vuoto]', dove);
-  const nota = $('[data-foto-nota]', dove);
+  const rullino = $('[data-rullino]', dove);
   const file = $('[data-file]', dove);
-  const rigaInq = $('[data-riga-inquadratura]', dove);
-  const inq = $('[data-inquadratura]', dove);
-  const alt = $('[data-alt]', dove);
+  const dettaglio = $('[data-dettaglio]', dove);
+  const scatti = bici.foto;
+  if (scattoScelto >= scatti.length) scattoScelto = Math.max(0, scatti.length - 1);
 
-  const url = urlFoto(bici);
-  $$('img', quadro).forEach((i) => i.remove());
-  if (url) {
+  // il rullino: una miniatura per foto, più il quadratino per aggiungerne
+  rullino.textContent = '';
+  scatti.forEach((scatto, i) => {
+    const li = document.createElement('li');
+    li.draggable = true;
+    li.dataset.i = i;
+    const bottone = document.createElement('button');
+    bottone.type = 'button';
+    bottone.className = i === scattoScelto ? 'is-sel' : '';
+    bottone.setAttribute('aria-label', `Foto ${i + 1} di ${scatti.length}`);
+    const url = urlScatto(scatto);
+    if (url) {
+      const im = new Image();
+      im.src = url;
+      im.alt = '';
+      im.style.objectPosition = `50% ${inquadraturaDi(scatto)}%`;
+      bottone.append(im);
+    }
+    const numero = document.createElement('span');
+    numero.className = 'rullino__n';
+    numero.textContent = String(i + 1);
+    bottone.append(numero);
+    bottone.addEventListener('click', () => { scattoScelto = i; disegnaScheda(); });
+    li.append(bottone);
+    trascinaScatto(li, bici);
+    rullino.append(li);
+  });
+
+  const ultima = document.createElement('li');
+  const piu = document.createElement('button');
+  piu.type = 'button';
+  piu.className = 'rullino__piu';
+  piu.setAttribute('aria-label', 'Aggiungi una foto');
+  piu.innerHTML = '<svg aria-hidden="true"><use href="#i-piu"/></svg>';
+  piu.addEventListener('click', () => file.click());
+  ultima.append(piu);
+  rullino.append(ultima);
+
+  // la foto scelta
+  const scatto = scatti[scattoScelto];
+  dettaglio.hidden = !scatto;
+  if (scatto) {
+    $('[data-quale]', dove).textContent = `Foto ${scattoScelto + 1} di ${scatti.length}`;
+    const quadro = $('[data-quadro]', dove);
+    quadro.textContent = '';
     const img = new Image();
-    img.src = url;
+    img.src = urlScatto(scatto);
     img.alt = '';
-    img.style.objectPosition = `50% ${inquadraturaDi(bici)}%`;
+    img.style.objectPosition = `50% ${inquadraturaDi(scatto)}%`;
     quadro.append(img);
-    vuoto.hidden = true;
-    rigaInq.hidden = false;
-    inq.value = inquadraturaDi(bici);
+
+    const inq = $('[data-inquadratura]', dove);
+    inq.value = inquadraturaDi(scatto);
     inq.addEventListener('input', () => {
-      bici.foto.inquadratura = Number(inq.value);
+      scatto.inquadratura = Number(inq.value);
       img.style.objectPosition = `50% ${inq.value}%`;
       disegnaLista();
       aggiorna();
     });
-  } else {
-    vuoto.hidden = false;
-    rigaInq.hidden = true;
-  }
 
-  alt.value = (bici.foto && bici.foto.alt) || '';
-  alt.addEventListener('input', () => {
-    bici.foto = bici.foto || {};
-    bici.foto.alt = alt.value;
-    aggiorna();
-  });
+    const alt = $('[data-alt]', dove);
+    alt.value = scatto.alt || '';
+    alt.addEventListener('input', () => { scatto.alt = alt.value; aggiorna(); });
 
-  $('[data-scegli-foto]', dove).addEventListener('click', () => file.click());
-  file.addEventListener('change', async () => {
-    const scelto = file.files[0];
-    if (!scelto) return;
-    nota.innerHTML = '<span class="filo"></span>Preparo la foto…';
-    try {
-      const pronta = await preparaFoto(scelto);
-      fotoNuove.set(bici._uid, pronta);
-      bici.foto = {
-        sorgente: 'sito',
-        chiave: '',           // il nome del file si decide quando si pubblica
-        alt: (bici.foto && bici.foto.alt) || '',
-        inquadratura: inquadraturaDi(bici),
-        larghezze: pronta.larghezze,
-      };
+    const sposta = (verso) => {
+      const j = scattoScelto + verso;
+      if (j < 0 || j >= scatti.length) return;
+      [scatti[scattoScelto], scatti[j]] = [scatti[j], scatti[scattoScelto]];
+      scattoScelto = j;
       disegnaScheda();
-      $('[data-foto-nota]', $('#scheda')).textContent =
-        pronta.avviso || 'Foto pronta. Si carica sul sito quando premi Pubblica.';
       disegnaLista();
       aggiorna();
-    } catch (e) {
-      nota.textContent = `Non riesco a leggere questa foto: ${e.message}`;
-    }
+    };
+    const indietro = $('[data-indietro]', dove);
+    const avanti = $('[data-avanti]', dove);
+    indietro.disabled = scattoScelto === 0;
+    avanti.disabled = scattoScelto === scatti.length - 1;
+    indietro.addEventListener('click', () => sposta(-1));
+    avanti.addEventListener('click', () => sposta(1));
+
+    $('[data-togli]', dove).addEventListener('click', () => {
+      if (!confirm(`Tolgo la foto ${scattoScelto + 1} di «${bici.titolo || 'questa bici'}»?`)) return;
+      const via = scatti.splice(scattoScelto, 1)[0];
+      if (via._locale) fotoNuove.delete(via._locale);
+      scattoScelto = Math.max(0, scattoScelto - 1);
+      disegnaScheda();
+      disegnaLista();
+      aggiorna();
+    });
+  }
+
+  // una o più foto nuove, prese dal telefono o dal computer
+  file.addEventListener('change', async () => {
+    const scelti = [...file.files];
     file.value = '';
+    if (!scelti.length) return;
+    const nota = $('[data-foto-nota]', dove);
+    let avviso = '';
+    for (let n = 0; n < scelti.length; n++) {
+      if (bici.foto.length >= MAX_FOTO) {
+        avviso = `Mi fermo a ${MAX_FOTO} foto per bici: sulla scheda del sito sarebbero troppe.`;
+        break;
+      }
+      nota.innerHTML = `<span class="filo"></span>Preparo le foto… ${n + 1} di ${scelti.length}`;
+      try {
+        const pronta = await preparaFoto(scelti[n]);
+        const locale = sigla() + sigla();
+        fotoNuove.set(locale, pronta);
+        bici.foto.push({
+          sorgente: 'sito', chiave: '', alt: '',
+          larghezze: pronta.larghezze, _locale: locale,
+        });
+        if (pronta.avviso) avviso = pronta.avviso;
+      } catch (e) {
+        avviso = `Una foto non si lascia leggere: ${e.message}`;
+      }
+    }
+    scattoScelto = Math.max(0, bici.foto.length - 1);
+    disegnaScheda();
+    $('[data-foto-nota]', $('#scheda')).textContent = avviso
+      || (scelti.length > 1 ? 'Foto pronte. Si caricano sul sito quando premi Pubblica.'
+                            : 'Foto pronta. Si carica sul sito quando premi Pubblica.');
+    disegnaLista();
+    aggiorna();
+  });
+}
+
+let scattoDaDove = null;
+function trascinaScatto(li, bici) {
+  li.addEventListener('dragstart', (e) => {
+    scattoDaDove = Number(li.dataset.i);
+    li.classList.add('is-trascina');
+    e.dataTransfer.effectAllowed = 'move';
+  });
+  li.addEventListener('dragend', () => {
+    li.classList.remove('is-trascina');
+    $$('.rullino li').forEach((x) => x.classList.remove('is-sopra'));
+  });
+  li.addEventListener('dragover', (e) => {
+    e.preventDefault();
+    $$('.rullino li').forEach((x) => x.classList.toggle('is-sopra', x === li));
+  });
+  li.addEventListener('drop', (e) => {
+    e.preventDefault();
+    const da = scattoDaDove;
+    const a = Number(li.dataset.i);
+    scattoDaDove = null;
+    if (da === null || da === a) return;
+    bici.foto.splice(a, 0, ...bici.foto.splice(da, 1));
+    scattoScelto = a;
+    disegnaScheda();
+    disegnaLista();
+    aggiorna();
   });
 }
 
@@ -654,12 +766,20 @@ function nuovoId(titolo, usati) {
 function controlla() {
   const problemi = [];
   for (const bici of dati.bici) {
-    const nome = bici.titolo.trim() || 'una bici senza nome';
-    const haFoto = fotoNuove.has(bici._uid) || (bici.foto && bici.foto.chiave);
     if (bici.stato === 'bozza') continue;
+    const nome = bici.titolo.trim() || 'una bici senza nome';
     if (!bici.titolo.trim()) problemi.push('C\'è una bici senza nome.');
-    if (!haFoto) problemi.push(`${nome}: non ha una foto.`);
-    else if (!((bici.foto.alt || '').trim())) problemi.push(`${nome}: manca la descrizione della foto.`);
+    if (!bici.foto.length) {
+      problemi.push(`${nome}: non ha nessuna foto.`);
+      continue;
+    }
+    const mute = bici.foto.filter((s) => !(s.alt || '').trim()).length;
+    if (mute) {
+      problemi.push(
+        bici.foto.length === 1 ? `${nome}: manca la descrizione della foto.`
+        : mute === 1 ? `${nome}: una foto su ${bici.foto.length} è senza descrizione.`
+        : `${nome}: ${mute} foto su ${bici.foto.length} sono senza descrizione.`);
+    }
   }
   return problemi;
 }
@@ -680,25 +800,35 @@ async function pubblica() {
     // 2. nomi dei file: ogni bici tiene lo stesso id per sempre, le foto nuove
     //    prendono una sigla diversa così i browser non mostrano quella vecchia.
     const usati = new Set(dati.bici.map((b) => b.id).filter(Boolean));
+    const presi = new Set();
     for (const bici of dati.bici) {
       if (!bici.id) bici.id = nuovoId(bici.titolo, usati);
-      if (fotoNuove.has(bici._uid)) bici.foto.chiave = `bici/${bici.id}-${sigla()}`;
+      for (const scatto of bici.foto) {
+        if (!scatto._locale) continue;
+        let chiave;
+        do { chiave = `bici/${bici.id}-${sigla()}`; } while (presi.has(chiave));
+        presi.add(chiave);
+        scatto.chiave = chiave;
+      }
     }
 
     // 3. le foto diventano blob su GitHub
     const albero = [];
     let fatte = 0;
+    const totale = totaleFoto();
     for (const bici of dati.bici) {
-      const nuova = fotoNuove.get(bici._uid);
-      if (!nuova) continue;
-      for (const w of nuova.larghezze) {
-        avvisa(`<span class="filo"></span>Carico le foto… ${++fatte} di ${totaleFoto()}`);
-        const bytes = new Uint8Array(await nuova.blobi[w].arrayBuffer());
-        const blob = await gh(inRepo('/git/blobs'), {
-          method: 'POST',
-          body: JSON.stringify({ content: base64(bytes), encoding: 'base64' }),
-        });
-        albero.push({ path: `assets/img/${bici.foto.chiave}-${w}.webp`, mode: '100644', type: 'blob', sha: blob.sha });
+      for (const scatto of bici.foto) {
+        const nuova = scatto._locale && fotoNuove.get(scatto._locale);
+        if (!nuova) continue;
+        for (const w of nuova.larghezze) {
+          avvisa(`<span class="filo"></span>Carico le foto… ${++fatte} di ${totale}`);
+          const bytes = new Uint8Array(await nuova.blobi[w].arrayBuffer());
+          const blob = await gh(inRepo('/git/blobs'), {
+            method: 'POST',
+            body: JSON.stringify({ content: base64(bytes), encoding: 'base64' }),
+          });
+          albero.push({ path: `assets/img/${scatto.chiave}-${w}.webp`, mode: '100644', type: 'blob', sha: blob.sha });
+        }
       }
     }
 
@@ -738,8 +868,12 @@ async function pubblica() {
 
     // 7. aspetta che il sito sia online
     for (const bici of dati.bici) {
-      const nuova = fotoNuove.get(bici._uid);
-      if (nuova) fotoCaricate.set(bici.foto.chiave, nuova.anteprima);
+      for (const scatto of bici.foto) {
+        const nuova = scatto._locale && fotoNuove.get(scatto._locale);
+        if (!nuova) continue;
+        fotoCaricate.set(scatto.chiave, nuova.anteprima);
+        delete scatto._locale;
+      }
     }
     fotoNuove.clear();
     impronta = impronteDati();
@@ -760,17 +894,21 @@ const totaleFoto = () => [...fotoNuove.values()].reduce((n, f) => n + f.larghezz
 
 function ripulisci(bici) {
   const { _uid, ...resto } = bici;
-  const foto = resto.foto && resto.foto.chiave ? { ...resto.foto } : {};
-  if (foto.inquadratura === 50) delete foto.inquadratura;
+  const foto = bici.foto.filter((s) => s.chiave).map((s) => {
+    const { _locale, ...scatto } = s;
+    if (scatto.inquadratura === 50) delete scatto.inquadratura;
+    return scatto;
+  });
   return { ...resto, foto };
 }
 
 async function fotoDaButtare() {
   const vive = new Set();
   for (const bici of dati.bici) {
-    if (bici.foto && bici.foto.sorgente === 'sito' && bici.foto.chiave) {
-      for (const w of bici.foto.larghezze || CONFIG.larghezze) {
-        vive.add(`assets/img/${bici.foto.chiave}-${w}.webp`);
+    for (const scatto of bici.foto) {
+      if (scatto.sorgente !== 'sito' || !scatto.chiave) continue;
+      for (const w of scatto.larghezze || CONFIG.larghezze) {
+        vive.add(`assets/img/${scatto.chiave}-${w}.webp`);
       }
     }
   }

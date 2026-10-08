@@ -18,7 +18,7 @@
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black">
-<link rel="stylesheet" href="stile.css?v=45f71fc935">
+<link rel="stylesheet" href="stile.css?v=884d41729e">
 </head>
 <body>
 
@@ -102,22 +102,27 @@
 
   <div class="gruppo">
     <p class="etichetta">Foto</p>
-    <div class="foto">
-      <div class="foto__quadro" data-quadro>
-        <span data-quadro-vuoto>Nessuna foto</span>
-      </div>
+    <p class="foto__nota" data-foto-nota>La prima è quella che si vede per prima: le altre scorrono da sole nella scheda sul sito. Trascinale o usa le frecce per cambiare ordine.</p>
+    <ol class="rullino" data-rullino></ol>
+    <input type="file" accept="image/*" multiple data-file>
+
+    <div class="foto" data-dettaglio hidden>
+      <div class="foto__quadro" data-quadro></div>
       <div>
-        <p class="foto__nota" data-foto-nota>Sul sito la foto viene tagliata in verticale (4:5), come la vedi qui a fianco.</p>
-        <button class="btn btn--vuoto btn--piccolo" type="button" data-scegli-foto>Scegli una foto</button>
-        <input type="file" accept="image/*" data-file>
-        <label class="campo campo--staccato" data-riga-inquadratura hidden>
+        <p class="etichetta" data-quale></p>
+        <label class="campo campo--staccato">
           <span class="etichetta">Inquadratura <em>— alza o abbassa il taglio</em></span>
           <input type="range" min="0" max="100" step="1" data-inquadratura>
         </label>
-        <label class="campo campo--staccato">
-          <span class="etichetta">Cosa si vede nella foto <em>— per chi non la può vedere e per Google</em></span>
+        <label class="campo">
+          <span class="etichetta">Cosa si vede in questa foto <em>— per chi non la può vedere e per Google</em></span>
           <input type="text" data-alt placeholder="es. Colnago V5Rs rossa su cavalletto in officina">
         </label>
+        <div class="foto__azioni">
+          <button class="btn btn--vuoto btn--piccolo" type="button" data-indietro aria-label="Sposta la foto indietro"><svg aria-hidden="true"><use href="#i-indietro"/></svg>Indietro</button>
+          <button class="btn btn--vuoto btn--piccolo" type="button" data-avanti aria-label="Sposta la foto avanti">Avanti<svg aria-hidden="true" class="gira"><use href="#i-indietro"/></svg></button>
+          <button class="btn btn--rosso btn--piccolo" type="button" data-togli>Togli questa foto</button>
+        </div>
       </div>
     </div>
   </div>
@@ -185,6 +190,6 @@
   </div>
 </template>
 
-<script src="app.js?v=0311d842da"></script>
+<script src="app.js?v=caf58341cd"></script>
 </body>
 </html>

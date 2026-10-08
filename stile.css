@@ -171,6 +171,31 @@ ol.bici { list-style: none; margin: 0; padding: 0; display: flex; flex-direction
 .gruppo { border: 1px solid var(--line); background: var(--paper); padding: 18px 20px 4px; margin-bottom: 18px; }
 .gruppo > .etichetta { display: block; margin: -28px 0 16px -8px; background: var(--alu); padding: 0 8px; width: fit-content; }
 
+/* il rullino delle foto di una bici */
+.rullino { list-style: none; margin: 0 0 18px; padding: 0; display: flex; flex-wrap: wrap; gap: 10px; }
+.rullino li { margin: 0; }
+.rullino li.is-trascina { opacity: .35; }
+.rullino li.is-sopra button { box-shadow: -3px 0 0 var(--blue); }
+.rullino button {
+  position: relative; display: block; overflow: hidden;
+  width: 74px; aspect-ratio: 4 / 5; padding: 0;
+  border: 1px solid var(--line); background: var(--alu-2);
+  cursor: pointer;
+}
+.rullino button:hover { border-color: var(--ink); }
+.rullino button.is-sel { border-color: var(--blue); box-shadow: inset 0 0 0 2px var(--blue); }
+.rullino img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.rullino__n {
+  position: absolute; left: 0; top: 0;
+  padding: 2px 5px 1px; background: var(--ink); color: var(--paper);
+  font-stretch: 85%; font-weight: 600; font-size: 10px; letter-spacing: .06em;
+}
+.rullino__piu { display: grid; place-items: center; border-style: dashed; background: transparent; color: var(--muted); }
+.rullino__piu:hover { color: var(--ink); }
+.rullino__piu svg { width: 20px; height: 20px; fill: none; stroke: currentColor; stroke-width: 2; }
+.foto__azioni { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 2px; }
+.gira { transform: rotate(180deg); }
+
 .foto { display: grid; grid-template-columns: 170px 1fr; gap: 18px; align-items: start; }
 .foto__quadro { position: relative; width: 170px; aspect-ratio: 4 / 5; background: var(--alu-2); overflow: hidden; border: 1px solid var(--line); }
 .foto__quadro img { width: 100%; height: 100%; object-fit: cover; display: block; }

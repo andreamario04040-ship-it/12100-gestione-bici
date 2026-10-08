@@ -11,7 +11,8 @@ Chi arriva sul sito del negozio non lo vede e non lo può nemmeno indovinare.
 Tre file e nessun server: `index.html`, `stile.css`, `app.js`. Il pannello parla
 direttamente con GitHub, dal browser. Quando si preme **Pubblica**:
 
-1. carica le foto già rimpicciolite (quattro misure in WebP, come le chiede il sito);
+1. carica le foto già rimpicciolite (fino a quattro misure in WebP, come le chiede
+   il sito): una bici ne può avere fino a otto, e sulla scheda scorrono da sole;
 2. scrive `data/bici.json` nel repository del sito;
 3. butta via le foto delle bici tolte;
 4. fa **un commit solo** con tutto.
