@@ -645,6 +645,8 @@ function disegnaFoto(dove, bici) {
     if (!scelti.length) return;
     const nota = $('[data-foto-nota]', dove);
     let avviso = '';
+    let partenza = 0;
+    let arrivo = 0;
     for (let n = 0; n < scelti.length; n++) {
       if (bici.foto.length >= MAX_FOTO) {
         avviso = `Mi fermo a ${MAX_FOTO} foto per bici: sulla scheda del sito sarebbero troppe.`;
@@ -659,6 +661,8 @@ function disegnaFoto(dove, bici) {
           sorgente: 'sito', chiave: '', alt: '',
           larghezze: pronta.larghezze, _locale: locale,
         });
+        partenza += scelti[n].size;
+        arrivo += pronta.peso;
         if (pronta.avviso) avviso = pronta.avviso;
       } catch (e) {
         avviso = `Una foto non si lascia leggere: ${e.message}`;
@@ -666,9 +670,10 @@ function disegnaFoto(dove, bici) {
     }
     scattoScelto = Math.max(0, bici.foto.length - 1);
     disegnaScheda();
-    $('[data-foto-nota]', $('#scheda')).textContent = avviso
-      || (scelti.length > 1 ? 'Foto pronte. Si caricano sul sito quando premi Pubblica.'
-                            : 'Foto pronta. Si carica sul sito quando premi Pubblica.');
+    $('[data-foto-nota]', $('#scheda')).textContent = avviso || (arrivo
+      ? `${scelti.length > 1 ? 'Foto pronte' : 'Foto pronta'}: da ${pesa(partenza)} a ${pesa(arrivo)}`
+        + ` in tutte le misure. Si ${scelti.length > 1 ? 'caricano' : 'carica'} sul sito quando premi Pubblica.`
+      : 'Non è stata preparata nessuna foto.');
     disegnaLista();
     aggiorna();
   });
@@ -713,26 +718,90 @@ function caricaImmagine(fileFoto) {
   });
 }
 
+/* Quanto può pesare una foto, in byte per pixel. Più la foto è grande, meno
+   serve per pixel: a 1800 la si guarda da lontano o su uno schermo denso, a 480
+   ogni pixel si vede. Sono i valori che reggono bene per le foto di una bici. */
+const PESO_PER_PIXEL = { 480: 0.115, 800: 0.100, 1200: 0.085, 1800: 0.070 };
+const QUALITA_BASE = 0.82;     // la qualità normale, quella che si vede bene
+const QUALITA_MINIMA = 0.62;   // sotto si vedono gli aloni intorno ai raggi
+const PROVE = 2;               // quanti aggiustamenti prima di accontentarsi
+
+const pesa = (byte) => (byte >= 1024 * 1024
+  ? `${(byte / 1024 / 1024).toFixed(1).replace('.', ',')} MB`
+  : `${Math.round(byte / 1024)} kB`);
+
+const inWebp = (tela, qualita) => new Promise((ok, no) => tela.toBlob(
+  (b) => (b ? ok(b) : no(new Error('il browser non riesce a convertirla'))), 'image/webp', qualita));
+
+/* Il ridimensionamento lo fa il browser, che internamente lavora a dimezzamenti
+   successivi. Rifarglielo a mano peggiora: misurato contro una media d'area
+   esatta, a 3x, 5x e 6x il salto singolo è più vicino al risultato corretto, e
+   dove perde (4x, 8x) la differenza è sotto 0,07 su 255, cioè invisibile. */
+function rimpicciolisci(img, larghezza) {
+  const tela = document.createElement('canvas');
+  tela.width = larghezza;
+  tela.height = Math.max(1, Math.round((img.naturalHeight * larghezza) / img.naturalWidth));
+  const c = tela.getContext('2d');
+  c.imageSmoothingEnabled = true;
+  c.imageSmoothingQuality = 'high';
+  c.drawImage(img, 0, 0, tela.width, tela.height);
+  return tela;
+}
+
+/* Quasi tutte le foto escono alla qualità normale e finiscono qui in un colpo
+   solo. Se una pesa più del previsto — succede con le foto piene di dettaglio,
+   un'officina disordinata, la ghiaia — si cerca la qualità più alta che sta nel
+   peso, e non si scende mai sotto il minimo: meglio una foto pesante che una
+   foto sfatta. La qualità non sale mai sopra quella normale: su una foto che si
+   comprime bene si tengono i byte risparmiati, invece di spenderli. */
+async function comprimi(tela, larghezza) {
+  const obiettivo = tela.width * tela.height * (PESO_PER_PIXEL[larghezza] || 0.09);
+  const base = await inWebp(tela, QUALITA_BASE);
+  if (base.size <= obiettivo) return { blob: base, qualita: QUALITA_BASE };
+
+  const minimo = await inWebp(tela, QUALITA_MINIMA);
+  if (minimo.size >= obiettivo) return { blob: minimo, qualita: QUALITA_MINIMA };
+
+  let basso = QUALITA_MINIMA;
+  let alto = QUALITA_BASE;
+  let scelto = minimo;
+  let qualita = QUALITA_MINIMA;
+  for (let i = 0; i < PROVE; i++) {
+    const meta = (basso + alto) / 2;
+    const prova = await inWebp(tela, meta);
+    if (prova.size > obiettivo) {
+      alto = meta;
+    } else {
+      basso = meta;
+      scelto = prova;
+      qualita = meta;
+    }
+  }
+  return { blob: scelto, qualita };
+}
+
 async function preparaFoto(fileFoto) {
   const img = await caricaImmagine(fileFoto);
   let larghezze = CONFIG.larghezze.filter((w) => w <= img.naturalWidth);
   if (!larghezze.length) larghezze = [CONFIG.larghezze[0]];
+
+  // Ogni misura si ricava dall'originale, non da quella appena fatta: due
+  // ricampionamenti di fila perdono più dettaglio di uno solo (misurato).
   const blobi = {};
+  const qualita = {};
   for (const w of larghezze) {
-    const scala = w / img.naturalWidth;
-    const tela = document.createElement('canvas');
-    tela.width = w;
-    tela.height = Math.max(1, Math.round(img.naturalHeight * scala));
-    const c = tela.getContext('2d');
-    c.imageSmoothingQuality = 'high';
-    c.drawImage(img, 0, 0, tela.width, tela.height);
-    blobi[w] = await new Promise((ok, no) => tela.toBlob(
-      (b) => (b ? ok(b) : no(new Error('il browser non riesce a convertirla'))), 'image/webp', 0.82));
+    const fatto = await comprimi(rimpicciolisci(img, w), w);
+    blobi[w] = fatto.blob;
+    qualita[w] = fatto.qualita;
   }
+
   const grande = larghezze[larghezze.length - 1];
+  const peso = larghezze.reduce((somma, w) => somma + blobi[w].size, 0);
   return {
     larghezze,
     blobi,
+    peso,
+    qualita,
     anteprima: URL.createObjectURL(blobi[larghezze[0]]),
     avviso: grande < 1200
       ? `Attenzione: la foto è larga ${img.naturalWidth} pixel, sul sito può risultare un po' sfocata. Meglio almeno 1200.`

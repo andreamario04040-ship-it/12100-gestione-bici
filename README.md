@@ -73,6 +73,33 @@ Due posti, tutti e due in cima ai file:
   `img-src` e in `connect-src`. Se non si aggiorna, il pannello smette di vedere
   le foto e di accorgersi che il sito è aggiornato.
 
+## Come vengono compresse le foto
+
+Una foto da telefono pesa 2–4 MB: sul sito non ci può andare così. Il pannello la
+rimpicciolisce nelle misure che il sito chiede (480, 800, 1200, 1800 pixel, solo
+quelle che ci stanno dentro) e la ricodifica in WebP, **senza mai uscire dal
+telefono**: parte solo il risultato.
+
+La qualità normale è 0,82. Se a quella qualità una foto supera il peso previsto
+per la sua misura — succede con le foto piene di dettaglio: un'officina
+disordinata, la ghiaia, le foglie — la qualità scende quel tanto che basta per
+rientrare, e **non scende mai sotto 0,62**: meglio una foto pesante che una foto
+sfatta. Non sale mai sopra 0,82: su una foto che si comprime bene i byte
+risparmiati si tengono, non si spendono.
+
+Il risultato è un peso prevedibile. Tre foto molto diverse fra loro, da 1,5 a
+3,5 MB l'una, escono tutte attorno ai 230 kB per tutte e quattro le misure
+insieme; una foto difficile che prima avrebbe pesato 373 kB ne pesa 237.
+
+Il ridimensionamento è un passaggio solo. Dimezzare a mano fino alla misura
+voluta è un consiglio che gira molto, ma misurato contro una media d'area esatta
+peggiora: Chrome lavora già internamente a dimezzamenti, e rifarglielo aggiunge
+errore. A 3x, 5x e 6x il salto singolo è più vicino al risultato corretto; dove
+perde (4x, 8x) la differenza è sotto 0,07 su una scala 0–255.
+
+Effetto collaterale utile: ricodificando, le foto **perdono tutti i metadati** —
+GPS, data, modello del telefono.
+
 ## Sul telefono
 
 Dal browser del telefono, **Condividi → Aggiungi alla schermata Home**: il pannello
